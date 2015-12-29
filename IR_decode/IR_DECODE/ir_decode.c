@@ -1,9 +1,3 @@
-/*
- * ir_decode.c
- *
- *  Created on: 2010-09-13
- *       Autor: Miros³aw Kardaœ
- */
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
