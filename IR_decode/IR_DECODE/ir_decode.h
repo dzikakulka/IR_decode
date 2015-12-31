@@ -1,6 +1,20 @@
 #ifndef IR_DECODE_H_
 #define IR_DECODE_H_
 
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / //
+//                        PROGRAM SETUP                        //
+
+// Available IR signal handling presets:
+#define PATTERN_LOG 0   // LOG set number of impulses for review
+#define DECODE_LGAKB 1  // DECODE LG AKB 729152xx remote signal
+#define DECODE_RC5 2    // DECODE RC5 standard compliant signal
+
+// Select one of above presets here:
+#define FUNCTION PATTERN_LOG
+
+//                                                             //
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / //
+
 // IR reciever & ICP1 port
 #define IR_PORT D
 #define IR_PIN 6
@@ -16,12 +30,41 @@
 // Timer 1 microseconds to ticks macro
 #define us_to_ticks(num) (((num)*F_CPU)/(1000000*TIMER1_PRESCALER))
 
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+// SIGNAL PATTERN LOGGING FUNCTION declarations
+#if FUNCTION == PATTERN_LOG
+// How many input pulses to log
+// Each change of input (lo-hi, hi-lo) is a pulse
+// Counting starts at first hi-lo transition
+#define MEAS_COUNT 128
+
+// Duration of each read impulse will be stored here
+// THIS IMPLIES MAX 65.5ms IMPULSE TIME
+// Change type to uint32_t if needed
+extern volatile uint16_t readWidth[MEAS_COUNT];
+// To determine state of each pulse, remember that:
+// Indexing pulses from 1, first has carrier wave present
+// Each pulse with ODD index took place when carrier was present
+// Each pulse with EVEN index took place when carrier was NOT present
+
+// This will be set to 1 when logging data is finished
+// Logging will start (again) every time it is set to 0 and IR input changes
+extern volatile uint8_t LOG_DONE_flag;
+
+#endif
+// END OF SIGNAL PATTERN LOGGING FUNCTION declarations
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+// LG AKB REMOTE DECODING decarations
+#if FUNCTION == DECODE_LGAKB
+
 // SETTINGS FOR IR TRANSMISSION W/ LG AKB 729152xx REMOTE
 // Information coding: interval between LOW-HIGH slopes (HIGH-LOW on recieving end)
 
 // Transmission format:
-// [HEADER][PRE_BITx16][MSG_BITx16][GAP][REPEAT](+[GAP][REPEAT] repeatedly on button hold)
-// TRAIL signal detection was omitted - my remote seems to not send it at all
+// [HEADER][PRE_BITx16][MSG_BITx16][TRAIL][GAP][REPEAT](+[GAP][REPEAT] repeatedly on button hold)
+// TRAIL signal detection was omitted - it is not needed it application
 
 // Full doc to be found at http://lirc.sourceforge.net/remotes/lg/AKB72915207
 
@@ -68,6 +111,31 @@ extern volatile uint16_t irData;
 // MUST BE CLEARED TO DECODE ANOTHER TRANSMISSION
 // Immediately after it is set, recieved command is available at irData variable
 extern volatile uint8_t IR_cmd_pending;
+
+#endif
+// END OF LG AKB REMOTE DECODING declarations
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+
+// / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+// RC% SIGNAL DECODING declarations
+#if FUNCTION == DECODE_RC5
+
+
+#define HBT_L 890
+#define HBT_TOL 100
+#define HBT(num) ( ((num) > (HBT_L - HBT_TOL)) && ((num) < (HBT_L + HBT_TOL)) )
+
+#define FBT_L 1780
+#define FBT_TOL 200
+#define FBT(num) ( ((num) > (FBT_L - FBT_TOL)) && ((num) < (FBT_L + FBT_TOL)) )
+
+extern volatile uint8_t address;
+extern volatile uint8_t command;
+
+extern volatile uint8_t IR_cmd_pending;
+extern volatile uint8_t IR_cmd_repeat;
+
+#endif
 
 // IR decoding process initialization
 void ir_init();
