@@ -3,6 +3,9 @@
 
 #include "ir_decode.h"
 #include "../makrau.h"
+#include "../UART/uart.h"
+
+	volatile uint16_t msgHist[50];
 
 #if FUNCTION == PATTERN_LOG
 
@@ -24,6 +27,13 @@ volatile uint16_t irData;
 // Succesful transmission decoding flag
 // MUST BE CLEARED TO DECODE ANOTHER TRANSMISSION
 // Immediately after it is set, recieved command is available at irData variable
+volatile uint8_t IR_cmd_pending;
+#endif
+
+#if FUNCTION == DECODE_RC5
+volatile uint8_t irAddress;
+volatile uint8_t irCommand;
+
 volatile uint8_t IR_cmd_pending;
 #endif
 
@@ -147,18 +157,15 @@ ISR(TIMER1_CAPT_vect) {
 }
 #endif
 
-#if FUNTION == DECODE_RC5
+#if FUNCTION == DECODE_RC5
 // INTERRUPT HANDLING
 // Triggered on 36kHz IR signal detection
 ISR(TIMER1_CAPT_vect) {
 
 #define FRAME_BEGIN 1
-#define ADDRES_BEGIN 2
-#define COMMAND_BEGIN 3
-#define FRAME_REPEAT 4
 #define FRAME_RESTART 0
+#define bitStatus (TCCR1B & (1<<ICES1))?0:1
 
-#define HDR ((message >> 13) & 1)
 #define FLD ((message >> 12) & 1)
 #define RPT ((message >> 11) & 1)
 
@@ -166,33 +173,83 @@ ISR(TIMER1_CAPT_vect) {
 	uint32_t PulseWidth;
 
 	static uint8_t frame_status = 0;
-	static uint8_t bitCount=0;
-	static uint16_t message;
-	static uint8_t halfBits[3];
-	static uint8_t halfBitsCount=0;
-	static uint8_t bitStatus;
+	static int8_t bitCount = 13;
+	static uint16_t message = 0;
+	static int8_t halfBit = 1;
+	static uint8_t lastRepeat;
+	static uint8_t first = 1;
 
 	PulseWidth = ICR1 - LastCapture;
-	LastCapture = ICR1;
 
-	if(frame_status == FRAME_RESTART)
-	{
-		message=0;
-		halfBitsCount=1;
-		history[0] = 1;
-		bitStatus=0;
-		TCCR1B ^= (1<<ICES1);
-		frame_status = FRAME_BEGIN;
-	}
-	else if(frame_status == FRAME_BEGIN)
-	{
+	PORTD ^= (1<<PD4);
 
-		if(FBT(ttus(PulseWidth)))
+	if(!IR_cmd_pending)
+	{
+		//PORTD ^= (1<<PD5);
+		if(frame_status == FRAME_RESTART)
 		{
+			bitCount = 13;
+			message = 0;
+			message |= (bitStatus<<bitCount);
+			bitCount--;
+			halfBit = 1;
+			frame_status = FRAME_BEGIN;
+		}
+		else if(frame_status == FRAME_BEGIN)
+		{
+			if(halfBit == 1)
+			{
+				if(HBT(ttus(PulseWidth)))
+				{
+					halfBit = 0;
+				}
+				else if(FBT(ttus(PulseWidth)))
+				{
+					message |= (bitStatus<<bitCount);
+					bitCount--;
+					halfBit = 1;
+				}
+				else frame_status = FRAME_RESTART;
+			}
+			else
+			{
+				if(HBT(ttus(PulseWidth)))
+				{
+					message |= (bitStatus<<bitCount);
+					bitCount--;
+					halfBit = 1;
+				}
+				else frame_status = FRAME_RESTART;
+			}
 
 		}
-	}
 
+		if(bitCount < 0)
+		{
+			if(frame_status != FRAME_RESTART)
+			{
+				//PORTD ^= (1<<PD5);
+				if( (RPT != lastRepeat) || first )
+				{
+				irAddress = (message & 0b0000011111000000)>>6;
+				irCommand = (message & 0b0000000000111111);
+				irCommand |= (!FLD)<<6;
+				IR_cmd_pending = 1;
+				lastRepeat = RPT;
+				first = 0;
+				}
+			}
+			frame_status = FRAME_RESTART;
+
+		}
+		//msgHist[dCount] = message;
+		//dCount++;
+		//if(frame_status == FRAME_RESTART){ IR_cmd_pending = 1; msgHist[dCount+1] = 0xffff;
+		//msgHist[dCount+2] = bitCount;}
+
+	}
+	if(frame_status == FRAME_RESTART) TCCR1B &= ~(1<<ICES1);
+	else TCCR1B ^= (1<<ICES1);
 
 }
 #endif

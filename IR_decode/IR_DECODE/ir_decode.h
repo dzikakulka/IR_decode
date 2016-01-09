@@ -1,6 +1,9 @@
 #ifndef IR_DECODE_H_
 #define IR_DECODE_H_
 
+
+extern volatile uint16_t msgHist[50];
+
 // / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / //
 //                        PROGRAM SETUP                        //
 
@@ -37,6 +40,8 @@
 // Each change of input (lo-hi, hi-lo) is a pulse
 // Counting starts at first hi-lo transition
 #define MEAS_COUNT 128
+
+#define USART_TRANSMIT 1
 
 // Duration of each read impulse will be stored here
 // THIS IMPLIES MAX 65.5ms IMPULSE TIME
@@ -122,18 +127,20 @@ extern volatile uint8_t IR_cmd_pending;
 
 
 #define HBT_L 890
-#define HBT_TOL 100
+#define HBT_TOL 200
 #define HBT(num) ( ((num) > (HBT_L - HBT_TOL)) && ((num) < (HBT_L + HBT_TOL)) )
 
 #define FBT_L 1780
-#define FBT_TOL 200
+#define FBT_TOL 300
 #define FBT(num) ( ((num) > (FBT_L - FBT_TOL)) && ((num) < (FBT_L + FBT_TOL)) )
 
-extern volatile uint8_t address;
-extern volatile uint8_t command;
+#define GAP_L 4000
+#define GAP(num) ( (num) > GAP_L )
+
+extern volatile uint8_t irAddress;
+extern volatile uint8_t irCommand;
 
 extern volatile uint8_t IR_cmd_pending;
-extern volatile uint8_t IR_cmd_repeat;
 
 #endif
 
